@@ -140,12 +140,12 @@ controller_interface::CallbackReturn FrankaRobotStateBroadcaster::on_deactivate(
 controller_interface::return_type FrankaRobotStateBroadcaster::update(
     const rclcpp::Time& time,
     const rclcpp::Duration& /*period*/) {
-  if (!realtime_franka_state_publisher->trylock()) {
-    RCLCPP_ERROR(get_node()->get_logger(),
-                 "Failed to lock the realtime publisher after %d attempts",
-                 realtime_franka_state_publisher->try_count());
-    return controller_interface::return_type::ERROR;
-  }
+  // if (!realtime_franka_state_publisher->trylock()) {
+  //   RCLCPP_ERROR(get_node()->get_logger(),
+  //                "Failed to lock the realtime publisher after %d attempts",
+  //                realtime_franka_state_publisher->try_count());
+  //   return controller_interface::return_type::ERROR;
+  // }
 
   realtime_franka_state_publisher->msg_.header.stamp = time;
 

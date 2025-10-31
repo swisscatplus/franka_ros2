@@ -1,0 +1,8 @@
+[submodule "libfranka"]
+	path = libfranka
+	url = https://github.com/frankaemika/libfranka.git
+	branch = stable
+[submodule "franka_description"]
+	path = franka_description
+	url = https://github.com/frankaemika/franka_description.git
+	branch = humble

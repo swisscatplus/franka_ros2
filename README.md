@@ -75,7 +75,7 @@ This repository contains a `.repos` file that helps you clone the required depen
     ```
 4. **Install the dependencies**
     ```bash
-    vcs import src < src/franka.repos --recursive --skip-existing
+    vcs import src < src/dependency.repos --recursive --skip-existing
     ```
 5. **Detect and install project dependencies**
    ```bash
@@ -130,7 +130,7 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
       ```
   6. **Clone the latests dependencies:**
       ```bash
-      vcs import src < src/franka.repos --recursive --skip-existing
+      vcs import src < src/dependency.repos --recursive --skip-existing
       ```
   7. **Build the workspace:**
       ```bash
@@ -157,7 +157,7 @@ For detailed instructions, on preparing VSCode to use the `.devcontainer` follow
 
   4. **Clone the latests dependencies:**
       ```bash
-      vcs import src < src/franka.repos --recursive --skip-existing
+      vcs import src < src/dependency.repos --recursive --skip-existing
       ```
 
   5. **Open a terminal and build the workspace:**
@@ -186,6 +186,7 @@ To verify that your setup works correctly without a robot, you can run the follo
 ```bash
 ros2 launch franka_fr3_moveit_config moveit.launch.py robot_ip:=dont-care use_fake_hardware:=true
 ```
+You can use the arguments `load_gripper` to activate or deactivate the end-effector and `ee_id` to set which end-effector you want to use. By default, the Franka Hand is activated.
 
 If you want to run this example with namespaces, you would need to use the argument `namespace` and manually write your namespace in `moveit.rviz` under `Move Group Namespace`.
 
@@ -194,14 +195,58 @@ If you want to run this example with namespaces, you would need to use the argum
 To run any example controller, make sure to add your desired configuration in `franka.config.yaml` and run:
 
 ```bash
-ros2 launch franka_bringup example.launch.py controller_name:=your_desired_controller
+ros2 launch franka_bringup example.launch.py controller_names:=your_desired_controller
 ```
 You can select one of the controllers from `controllers.yaml`.
+
+### Run different controllers for different robots
+
+If you want to run a specific controller for each robot, you must specify the controllers you want to run as follows (example for three robots):
+
+```bash
+ros2 launch franka_bringup example.launch.py controller_names:="cartesian_elbow_example_controller,joint_impedance_example_controller,cartesian_velocity_example_controller"
+```
+If less controllers than the number of robots are specified, only the first controller would be used for all the robots. TMR controllers can also be used.
+
+### Run FR3 Duo
+
+For FR3 Duo setups, use the `fr3_duo.launch.py` launch file with the `fr3_duo.config.yaml` configuration:
+
+```bash
+ros2 launch franka_bringup fr3_duo.launch.py \
+  robot_config_file:=fr3_duo.config.yaml \
+  controller_name:=fr3_duo_joint_impedance_example_controller
+```
+
+**Note:** The FR3 Duo setup supports only **one controller** at a time and uses the `controller_name` parameter (singular). The dual-arm setup currently only supports the torque (effort) command interface.
+
+### Move the TMRv0.2
+
+You can move the TMRv0.2 either:
+
+- By using a remote XBOX controller:
+
+```bash
+ros2 launch franka_bringup mobile_teleop.launch.py controller_names:="mobile_cartesian_velocity_example_controller"
+```
+
+This launch file spawns the required additional nodes for remote control.
+
+- By using the PC keyboard:
+
+Launch on one terminal:
+```bash
+ros2 launch franka_bringup example.launch.py controller_names:="mobile_cartesian_velocity_example_controller"
+```
+On another terminal launch:
+```bash
+`ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -p stamped:=true --remap /cmd_vel:=/${NS}/mobile_cartesian_velocity_controller/cmd_vel`
+```
+Replace ${NS} with the corresponding namespace.
 
 ### Run Gazebo examples with ROS 2
 
 If you want to use Gazebo to run your code, you can find some examples here: [franka_gazebo](./franka_gazebo/README)
-
 
 ## Troubleshooting
 ### `libfranka: UDP receive: Timeout error`

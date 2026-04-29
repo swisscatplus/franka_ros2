@@ -25,7 +25,7 @@ can be used to start the robot without any controllers.
 
 When you start the robot with::
 
-    ros2 launch franka_bringup franka.launch.py arm_id:=fr3 robot_ip:=<fci-ip> use_rviz:=true
+    ros2 launch franka_bringup franka.launch.py robot_type:=fr3 robot_ip:=<fci-ip> use_rviz:=true
 
 There is no controller running apart from the ``joint_state_broadcaster``. However, a connection with the robot is still
 established and the current robot pose is visualized in RViz. In this mode the robot can be guided when the user stop
@@ -88,7 +88,52 @@ Then, for example, to run the *move_to_start_example_controller*, use the follow
 
 .. code-block:: shell
 
-    ros2 launch franka_bringup example.launch.py controller_name:=move_to_start_example_controller
+    ros2 launch franka_bringup example.launch.py controller_names:=move_to_start_example_controller
+
+FR3 Duo
+------------------------
+
+The ``franka_bringup`` package supports launching a FR3 Duo setup using the ``fr3_duo.launch.py``
+launch file with the ``fr3_duo.config.yaml`` configuration file.
+
+.. important::
+
+    The FR3 Duo setup currently only supports the **torque (effort) command interface**. Position, velocity,
+    and Cartesian pose/velocity interfaces are not supported for dual-arm configurations.
+
+Configuration
+^^^^^^^^^^^^^
+
+The dual-arm configuration is defined in ``franka_bringup/config/fr3_duo.config.yaml``. The key parameters are:
+
+* ``robot_types``: Types of the robot arms as a string list (e.g., ``"['fr3','fr3']"``)
+* ``arm_prefixes``: Unique prefixes for each arm (e.g., ``"['right','left']"``)
+* ``robot_ips``: IP addresses of the robots as a string list (e.g., ``"['172.16.0.3','172.16.0.5']"``)
+
+.. note::
+
+    All three arrays (``robot_types``, ``robot_ips``, ``arm_prefixes``) must have the same length,
+    and ``arm_prefixes`` must contain unique values.
+
+Launching the FR3 Duo
+^^^^^^^^^^^^^^^^^^^^^
+
+
+To launch the dual-arm setup with the joint impedance controller using a config file:
+
+.. code-block:: shell
+
+    ros2 launch franka_bringup fr3_duo.launch.py \
+        robot_config_file:=fr3_duo.config.yaml \
+        controller_name:=fr3_duo_joint_impedance_example_controller
+
+You can also specify just the config filename, and the launch file will automatically look in the
+``franka_bringup/config/`` directory.
+
+.. note::
+
+    The FR3 Duo setup supports only **one controller** at a time using the ``controller_name`` parameter (singular),
+    unlike ``example.launch.py`` which supports multiple controllers with ``controller_names`` (plural).
 
 Non-realtime robot parameter setting
 ------------------------------------
@@ -113,12 +158,12 @@ Service message descriptions are given below.
    (damping is automatically derived from the stiffness).
  * ``franka_msgs::srv::SetCartesianStiffness`` specifies Cartesian stiffness for the internal
    controller (damping is automatically derived from the stiffness).
- * ``franka_msgs::srv::SetTCPFrame`` specifies the transformation from <arm_id>_EE (end effector) to
-   <arm_id>_NE (nominal end effector) frame. The transformation from flange to end effector frame
-   is split into two transformations: <arm_id>_EE to <arm_id>_NE frame and <arm_id>_NE to
-   <arm_id>_link8 frame. The transformation from <arm_id>_NE to <arm_id>_link8 frame can only be
+ * ``franka_msgs::srv::SetTCPFrame`` specifies the transformation from <robot_type>_EE (end effector) to
+   <robot_type>_NE (nominal end effector) frame. The transformation from flange to end effector frame
+   is split into two transformations: <robot_type>_EE to <robot_type>_NE frame and <robot_type>_NE to
+   <robot_type>_link8 frame. The transformation from <robot_type>_NE to <robot_type>_link8 frame can only be
    set through the administrator's interface.
- * ``franka_msgs::srv::SetStiffnessFrame`` specifies the transformation from <arm_id>_K to <arm_id>_EE frame.
+ * ``franka_msgs::srv::SetStiffnessFrame`` specifies the transformation from <robot_type>_K to <robot_type>_EE frame.
  * ``franka_msgs::srv::SetForceTorqueCollisionBehavior`` sets thresholds for external Cartesian
    wrenches to configure the collision reflex.
  * ``franka_msgs::srv::SetFullCollisionBehavior`` sets thresholds for external forces on Cartesian
@@ -145,12 +190,12 @@ Here is a minimal example:
 
 .. important::
 
-    The <arm_id>_EE frame denotes the part of the
+    The <robot_type>_EE frame denotes the part of the
     configurable end effector frame which can be adjusted during run time through `franka_ros`. The
-    <arm_id>_K frame marks the center of the internal
+    <robot_type>_K frame marks the center of the internal
     Cartesian impedance. It also serves as a reference frame for external wrenches. *Neither the
-    <arm_id>_EE nor the <arm_id>_K are contained in the URDF as they can be changed at run time*.
-    By default, <arm_id> is set to "panda".
+    <robot_type>_EE nor the <robot_type>_K are contained in the URDF as they can be changed at run time*.
+    By default, <robot_type> is set to "panda".
 
     .. figure:: ../../docs/assets/frames.svg
         :align: center

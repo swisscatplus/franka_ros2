@@ -41,7 +41,8 @@ namespace franka_hardware {
 
 class FrankaHardwareInterface : public hardware_interface::SystemInterface {
  public:
-  explicit FrankaHardwareInterface(const std::shared_ptr<Robot>& robot, const std::string& arm_id);
+  explicit FrankaHardwareInterface(const std::shared_ptr<Robot>& robot,
+                                   const std::string& robot_type);
   FrankaHardwareInterface();
   FrankaHardwareInterface(const FrankaHardwareInterface&) = delete;
   FrankaHardwareInterface& operator=(const FrankaHardwareInterface& other) = delete;
@@ -76,7 +77,7 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
   void initializePositionCommands(const franka::RobotState& robot_state);
 
   // Support Franka ros2 control interface version
-  const int kSupportedControlInterfaceMajor = 0;
+  const int kSupportedControlInterfaceMajor = 1;
 
   // Initialize joint position commands in the first pass
   bool first_elbow_update_{true};
@@ -175,10 +176,13 @@ class FrankaHardwareInterface : public hardware_interface::SystemInterface {
 
   static rclcpp::Logger getLogger();
 
-  std::string arm_id_{"fr3"};
+  std::string robot_type_{"fr3"};
+  std::string prefix_;  // Prefix for joint names in dual-arm setups (e.g.,
+                        // "left_", "right_")
   const std::string k_robot_state_interface_name{"robot_state"};
   const std::string k_robot_model_interface_name{"robot_model"};
   const size_t max_number_start_interfaces = 45;
+  std::mutex control_mutex_;
 
   std::unordered_set<std::string> exported_command_interfaces_;
 };

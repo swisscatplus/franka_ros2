@@ -14,15 +14,18 @@
 
 ############################################################################
 # Parameters:
-# controller_name: Name of the controller to spawn (required, no default)
-# robot_config_file: Path to the robot configuration file to load
-#                   (default: franka.config.yaml in franka_bringup/config)
+# controller_names: Comma-separated list of controller names to spawn (required, no default)
+# robot_config_file: Configuration file name or path. If just a filename is
+#                   provided (e.g., 'franka.config.yaml'), it will be
+#                   looked up in franka_bringup/config/ directory.
+#                   (default: franka.config.yaml)
 #
 # The example.launch.py launch file provides a flexible and unified interface
-# for launching Franka Robotics example controllers via the 'controller_name'
-# parameter, such as 'elbow_example_controller'.
+# for launching Franka Robotics example controllers for single robot setups
+# via the 'controller_names' parameter, such as 'elbow_example_controller'.
+# For dual-arm (duo) setups, use fr3_duo.launch.py directly.
 # Example:
-# ros2 launch franka_bringup example.launch.py controller_name:=elbow_example_controller
+# ros2 launch franka_bringup example.launch.py controller_names:=elbow_example_controller
 #
 # This script "includes" franka.launch.py to declare core component nodes,
 # including: robot_state_publisher, ros2_control_node, joint_state_publisher,
@@ -40,31 +43,45 @@
 # specific use cases, example.launch.py enhances scalability and ease of use
 # for a wide range of Franka Robotics applications.
 #
-# Ensure the specified  controller_name matches a controller defined in
-#  controllers.yaml to avoid runtime errors.
+# Ensure the specified controller_names match controllers defined in
+# controllers.yaml to avoid runtime errors.
 ############################################################################
 
-
+import importlib.util
 import os
 import sys
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    OpaqueFunction,
+)
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
-# Add the path to the `utils` folder
-package_share = get_package_share_directory('franka_bringup')
-utils_path = os.path.join(package_share, '..', '..', 'lib', 'franka_bringup', 'utils')
-sys.path.append(os.path.abspath(utils_path))
+# constant for the controller name parameter
+CONTROLLER_EXAMPLE = 'controller'
 
-from launch_utils import load_yaml  # noqa: E402
+package_share = get_package_share_directory('franka_bringup')
+utils_path = os.path.abspath(
+    os.path.join(package_share, '..', '..', 'lib', 'franka_bringup', 'utils')
+)
+launch_utils_path = os.path.join(utils_path, 'launch_utils.py')
+
+spec = importlib.util.spec_from_file_location('launch_utils', launch_utils_path)
+launch_utils = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(launch_utils)
+
+load_yaml = launch_utils.load_yaml
+get_controller_for_config = launch_utils.get_controller_for_config
+
 
 # Iterates over the uncommented lines in file specified by the robot_config_file parameter.
-# "Includes" franka.launch.py for each active (uncommented) Robot.
+# 'Includes' franka.launch.py for each active (uncommented) Robot.
 # That file is well documented.
 # The function also checks if the 'use_rviz' parameter is set to true in the YAML file.
 # If so, it includes a node for RViz to visualize the robot's state.
@@ -73,23 +90,34 @@ from launch_utils import load_yaml  # noqa: E402
 
 def generate_robot_nodes(context):
     config_file = LaunchConfiguration('robot_config_file').perform(context)
-    controller_name = LaunchConfiguration('controller_name').perform(context)
+
+    # If config_file is just a filename (no path separators), look in franka_bringup/config/
+    if not os.path.isabs(config_file) and os.path.sep not in config_file:
+        config_file = os.path.join(package_share, 'config', config_file)
+
+    controller_names = LaunchConfiguration('controller_names').perform(context)
     configs = load_yaml(config_file)
     nodes = []
-    for item_name, config in configs.items():
-        namespace = config['namespace']
+
+    for index, (_, config) in enumerate(configs.items()):
+        namespace = config.get('namespace', '')
+
+        # Single robot configuration: use franka.launch.py
         nodes.append(
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
-                    PathJoinSubstitution([
-                        FindPackageShare('franka_bringup'), 'launch', 'franka.launch.py'
-                    ])
+                    PathJoinSubstitution(
+                        [
+                            FindPackageShare('franka_bringup'),
+                            'launch',
+                            'franka.launch.py',
+                        ]
+                    )
                 ),
                 launch_arguments={
-                    'arm_id': str(config['arm_id']),
+                    'robot_type': str(config['robot_type']),
                     'arm_prefix': str(config['arm_prefix']),
                     'namespace': str(namespace),
-                    'urdf_file': str(config['urdf_file']),
                     'robot_ip': str(config['robot_ip']),
                     'load_gripper': str(config['load_gripper']),
                     'use_fake_hardware': str(config['use_fake_hardware']),
@@ -98,34 +126,74 @@ def generate_robot_nodes(context):
                 }.items(),
             )
         )
-        nodes.append(
-            Node(
-                package='controller_manager',
-                executable='spawner',
-                namespace=namespace,
-                arguments=[controller_name, '--controller-manager-timeout', '30'],
-                parameters=[PathJoinSubstitution([
-                    FindPackageShare('franka_bringup'), 'config', 'controllers.yaml',
 
-                ])],
-                output='screen',
-            )
+        # Determine which controller to use for this config
+        controller_name = get_controller_for_config(
+            controller_names, num_configs=len(configs), config_index=index
         )
-    if any(str(config.get('use_rviz', 'false')).lower() == 'true' for config in configs.values()):
+        if not controller_name:
+            print(
+                'Error: No controller names provided. Please provide at least one controller name.'
+            )
+            sys.exit(1)
+
+        if CONTROLLER_EXAMPLE in controller_name:
+            # Spawn the example as ros2_control controller
+            nodes.append(
+                Node(
+                    package='controller_manager',
+                    executable='spawner',
+                    namespace=namespace,
+                    arguments=[controller_name, '--controller-manager-timeout', '30'],
+                    parameters=[
+                        PathJoinSubstitution(
+                            [
+                                FindPackageShare('franka_bringup'),
+                                'config',
+                                'controllers.yaml',
+                            ]
+                        )
+                    ],
+                    output='screen',
+                )
+            )
+        else:
+            # Spawn the example as node
+            nodes.append(
+                Node(
+                    package='franka_example_controllers',
+                    executable=controller_name,
+                    namespace=namespace,
+                    output='screen',
+                )
+            )
+
+    if any(
+        str(config.get('use_rviz', 'false')).lower() == 'true'
+        for config in configs.values()
+    ):
         nodes.append(
             Node(
                 package='rviz2',
                 executable='rviz2',
                 name='rviz2',
-                arguments=['--display-config', PathJoinSubstitution([
-                    FindPackageShare('franka_description'), 'rviz', 'visualize_franka.rviz'
-                ])],
+                arguments=[
+                    '--display-config',
+                    PathJoinSubstitution(
+                        [
+                            FindPackageShare('franka_description'),
+                            'rviz',
+                            'visualize_franka.rviz',
+                        ]
+                    ),
+                ],
                 output='screen',
             )
         )
     return nodes
 
-# The generate_launch_description function is the entry point (like "main")
+
+# The generate_launch_description function is the entry point (like 'main')
 # It is called by the ROS 2 launch system when the launch file is executed.
 # via: ros2 launch franka_bringup example.launch.py ARGS...
 # This function must return a LaunchDescription object containing nodes to be launched.
@@ -133,17 +201,17 @@ def generate_robot_nodes(context):
 
 
 def generate_launch_description():
-    return LaunchDescription([
-        DeclareLaunchArgument(
-            'robot_config_file',
-            default_value=PathJoinSubstitution([
-                FindPackageShare('franka_bringup'), 'config', 'franka.config.yaml'
-            ]),
-            description='Path to the robot configuration file to load',
-        ),
-        DeclareLaunchArgument(
-            'controller_name',
-            description='Name of the controller to spawn (required, no default)',
-        ),
-        OpaqueFunction(function=generate_robot_nodes),
-    ])
+    return LaunchDescription(
+        [
+            DeclareLaunchArgument(
+                'robot_config_file',
+                default_value='franka.config.yaml',
+                description='Config file name (looked up in franka_bringup/config/) or full path',
+            ),
+            DeclareLaunchArgument(
+                'controller_names',
+                description='Comma-separated list of controller names to spawn (required)',
+            ),
+            OpaqueFunction(function=generate_robot_nodes),
+        ]
+    )

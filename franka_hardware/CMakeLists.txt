@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.5)
 project(franka_hardware)
 
 if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 17)
+  set(CMAKE_CXX_STANDARD 20)
   set(CMAKE_CXX_STANDARD_REQUIRED ON)
 endif()
 
@@ -19,7 +19,7 @@ find_package(rclcpp_action REQUIRED)
 find_package(franka_msgs REQUIRED)
 find_package(hardware_interface REQUIRED)
 find_package(pluginlib REQUIRED)
-find_package(Franka 0.13.2 REQUIRED)
+find_package(Franka 0.19.0 REQUIRED)
 find_package(rclcpp_components REQUIRED)
 
 add_library(franka_hardware SHARED
@@ -29,6 +29,7 @@ add_library(franka_hardware SHARED
         src/franka_param_service_server.cpp
         src/robot.cpp
         src/ros_libfranka_logger.cpp
+        src/actions_helper/ptp_motion_handler.cpp
 )
 
 target_include_directories(
